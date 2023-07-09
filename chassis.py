@@ -1,4 +1,4 @@
-from blades import Blades
+from blade_server import Blades
 
 class Chassis:
     def __init__(self, blades, index):
@@ -11,15 +11,15 @@ class Chassis:
         self.inputVoltageId = 6
         self.powerSupplyId = 36
         self.powerSupplyTypeName = "2500W PSU DV"
-        self.powerSupplyCount = 4
+        self.powerSupplyCount = 2
         self.iom = 801
         self.ioModuleTypeName = "2208"
         self.iomCount = 2
-        self.blades = [blades]
+        self.blades = blades
         self.additionalComponentOne = None
         self.additionalComponentTwo = None
         self.additionalComponentThree = None
         self.additionalComponentFour = None
         self.additionalComponentFive = None
-        self.projectName = "Bharti Airtel-Existing"
+        self.projectName = "MayBankExisting"
 

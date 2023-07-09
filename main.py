@@ -3,21 +3,25 @@ from power_api import build_api_payload, execute_post_api
 from generateInsights import generateInsights
 from recoRuleEngine import recoRuleEngine
 from upload_s3 import S3Uploader
-
+from json_to_pdf import JSONtoPDFConverter
+from server_counts import ServerCounts
+import json
 
 if __name__ == '__main__':
-    rack_quantity_value = 229
-    bladeQuantity = 12
-    gu_id = 96361
 
-    oracle_ops = OracleOperations()
+    counts = ServerCounts(12, 5, 0, 105, 67, 22, 0)
+    gu_id = 145889241 #145889241 #96361
+
+    #oracle_ops = OracleOperations()
     #rack_quantity_value, bladeQuantity = oracle_ops.get_server_counts(gu_id)
+    
+    powerapi_request_json = build_api_payload(counts)
+    powerapi_response_json= execute_post_api(powerapi_request_json)
 
-    sustaibility_metrics_json = build_api_payload(rack_quantity_value, bladeQuantity)
-    response_json = execute_post_api(sustaibility_metrics_json)
+    print(powerapi_response_json)
 
     # Extract and round off metricCoolingWatts and imperialCooling values
-    input_cooling = response_json['inputCooling']
+    input_cooling = powerapi_response_json['inputCooling']
     metric_cooling_watts = round(input_cooling['metricCoolingWatts'])
     imperial_cooling = round(input_cooling['imperialCooling'])
 
@@ -55,13 +59,19 @@ if __name__ == '__main__':
     print("After Recommendation, Imperial Cooling:", rec_imperial_cooling, "BTU/hr")
 
     gi = generateInsights()
-    gi.totalproduct["oldSeriesknt"] = rule_engine.asisConfig["bServer"] + rule_engine.asisConfig["rServer"]
-    gi.totalproduct["oldChassisknt"] = round(rule_engine.asisConfig["bServer"] / 8)
-    gi.totalproduct["newSeriesknt"] = rule_engine.recommendedConfig["bServer"]
-    gi.totalproduct["newChassisknt"] = rule_engine.recommendedConfig["chassis"]
+    gi.totalProduct["oldSeriesknt"] = rule_engine.asisConfig["bServer"] + rule_engine.asisConfig["rServer"]
+    gi.totalProduct["oldChassisknt"] = round(rule_engine.asisConfig["bServer"] / 8)
+    gi.totalProduct["newSeriesknt"] = rule_engine.recommendedConfig["bServer"]
+    gi.totalProduct["newChassisknt"] = rule_engine.recommendedConfig["chassis"]
+    
+    gi.asisSustainabilityParams["Power"] = metric_cooling_watts
+    gi.newSustainabilityParams["Power"] = rec_metric_cooling_watts
+    gi.asisSustainabilityParams["heat"] = imperial_cooling
+    gi.newSustainabilityParams["heat"] = rec_imperial_cooling
     gi.runInsights()
     
     insightsData = gi.response 
+    print("Insights for GUID :", gu_id)
     print(gi.response)
 
      # Instantiate S3Uploader with your bucket name
@@ -70,3 +80,14 @@ if __name__ == '__main__':
     # Upload the JSON file to S3
     file_name = f"{gu_id}.json"
     s3_uploader.upload_json_file(file_name, insightsData)
+
+    #infoFromJson = json.loads(insightsData)
+    #print(json2html.convert(insightsData))
+
+    converter = JSONtoPDFConverter()
+    converter.convert_json_to_pdf(insightsData)
+
+
+
+    # Now you can upload the PDF content to S3
+    # Upload code goes here

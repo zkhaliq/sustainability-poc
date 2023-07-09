@@ -1,57 +1,105 @@
+from memory_rack_m4 import MemoryRackM4
+from memory_rack_m5 import MemoryRackM5
+from memory_blade_m4 import MemoryBladeM4
+from memory_blade_m5 import MemoryBladeM5
+from memory_blade_m6 import MemoryBladeM6
+
+from adaptor_rack_m4 import AdaptorRackM4
+from adaptor_rack_m5 import AdaptorRackM5
+from adaptor_blade_m4 import AdaptorBladeM4
+from adaptor_blade_m5m6 import AdaptorBladeM5M6
+
+from rack_server_m4 import RackServerM4
+from rack_server_m5 import RackServerM5
+
+from blade_server_m4 import BladeServerM4
+from blade_server_m5 import BladeServerM5
+from blade_server_m6 import BladeServerM6
+from blade_server_m7 import BladeServerM7
+
+
+from blade_server import Blades
 from rack_server import RackServer
-from adaptor import Adaptor
-from memory import Memory
-from adaptor_blade import AdaptorBlade
-from memory_blade import MemoryBlade
-from blades import Blades
+
+from switches import Switches
 from chassis import Chassis
-from sustainability_metrics import SustainbilityMetrics
+from power_api_request import PowerAPIRequest
+
 import requests
 import json
 
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, (Adaptor, Memory, RackServer, Blades, Chassis, AdaptorBlade, MemoryBlade)):
+        if isinstance(obj, (MemoryRackM4, MemoryRackM5, MemoryBladeM4, MemoryBladeM5, MemoryBladeM6,
+         AdaptorRackM4, AdaptorRackM5, AdaptorBladeM4, AdaptorBladeM5M6, RackServerM4, RackServerM5, 
+         BladeServerM4, BladeServerM5, BladeServerM6, Blades, RackServer, Switches, Chassis, PowerAPIRequest  )):
             return obj.__dict__
         return super().default(obj)
 
 def execute_post_api(json_data):
-    headers = {'Content-Type': 'application/json','Authorization':'Basic ***'}
-    url = "https://******/public/project/power"
+    headers = {'Content-Type': 'application/json','Authorization':'Basic dWNzX3VzZXI6dWNzX3Bhc3N3b3Jk'}
+    url = "https://ucsngws.cisco.com/public/project/power"
     response = requests.post(url, data=json_data, headers=headers)
     response_json = response.json()
     return response_json
 
-def build_api_payload(rack_quantity, bladeQuantity):
-    # Set the quantity attribute
-    rack_server = RackServer(rack_quantity)
-
-    blade_quantity = min(bladeQuantity, 8)
-    chassis_count = bladeQuantity // 8  # returns the quotient rounded down to the nearest whole number, this give X-1 number of chassis object to be created 
-    #print(blade_quantity)
-    #print(chassis_count)
-
-    blades = []
-    for i in range(chassis_count):
-        blades.append(Blades(quantity=8))
-
-    remaining_quantity = bladeQuantity % 8
-    if remaining_quantity > 0:
-        blades.append(Blades(quantity=remaining_quantity))
-
+def build_api_payload(counts):
+    rackservers = []
     chassis_list = []
-    index = 0
-    for blade in blades:
-        index += 1
-        chassis_list.append(Chassis(blade,index))    
-    
-    sustaibility_metrics = SustainbilityMetrics(rack_server, chassis_list)
+
+    # Initialize RackServers with Quantity. RackServers don't need Chassis
+    if counts.rack_m4_servers > 0:
+        rackserver_m4 = RackServerM4(counts.rack_m4_servers)
+        rackservers.append(rackserver_m4)
+
+    if counts.rack_m5_servers > 0:
+        rackserver_m5 = RackServerM5(counts.rack_m5_servers)
+        rackservers.append(rackserver_m5)
+
+    # Chassis
+    chassis_index = 1
+    blade_server_types = [
+        (BladeServerM4, counts.blade_m4_servers),
+        (BladeServerM5, counts.blade_m5_servers),
+        (BladeServerM6, counts.blade_m6_servers),
+        (BladeServerM7, counts.blade_m7_servers)
+    ]
+
+    chassis_blades = []  # List to hold the blades for a single chassis
+
+    for blade_server_type, server_count in blade_server_types:
+        while server_count > 0:
+            remaining_capacity = 8 - sum(b.quantity for b in chassis_blades)
+            if remaining_capacity == 0:
+                # If the current chassis is full, create a new chassis and reset the list
+                chassis_list.append(Chassis(chassis_blades, chassis_index))
+                chassis_index += 1
+                chassis_blades = []
+                remaining_capacity = 8
+
+            # Determine the quantity to add to the current chassis
+            blade_quantity = min(server_count, remaining_capacity)
+            if blade_quantity > 0:
+                chassis_blades.append(blade_server_type(quantity=blade_quantity))
+
+            server_count -= blade_quantity
+
+    # Add the remaining blades to the last chassis
+    if chassis_blades:
+        chassis_list.append(Chassis(chassis_blades, chassis_index))
+
+    switches = []
+    powerapi_request = PowerAPIRequest(rackservers, chassis_list, switches)
 
     # Convert the RackServer object to JSON
-    sustaibility_metrics_json = json.dumps(sustaibility_metrics.__dict__, cls=CustomEncoder)
+    powerapi_request_json = json.dumps(powerapi_request.__dict__, cls=CustomEncoder)
 
     # Print the JSON representation
-    #print(sustaibility_metrics_json)
+    print(powerapi_request_json)
 
-    return sustaibility_metrics_json
+    return powerapi_request_json
+
+
+
  
+
